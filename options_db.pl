@@ -35,3 +35,6 @@ option(язык_программирования, cpp).
 option(зп, 100000).
 
 option(формат_работы, удалёнка).
+option(опыт_работы, end_of_file).
+option(формат_работы, end_of_file).
+option(зп, end_of_file).
