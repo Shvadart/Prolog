@@ -27,14 +27,5 @@ option(зп, 30000).
 option(зп, 40000).
 option(зп, 50000).
 option(зп, 60000).
-
-
-
-
 option(язык_программирования, cpp).
 option(зп, 100000).
-
-option(формат_работы, удалёнка).
-option(опыт_работы, end_of_file).
-option(формат_работы, end_of_file).
-option(зп, end_of_file).

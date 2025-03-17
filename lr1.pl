@@ -261,7 +261,7 @@ wrap(P, Arg, Goal) :-
 
 read_languages(Languages) :-
     write('Введите язык программирования: '), read(Lang),
-    read_languages_aux([Lang], Languages).
+    Languages = [Lang].
 
 read_languages_aux(Acc, Languages) :-
     writeln('Добавить еще язык? (1 - Да, 2 - Перейти к следующему пункту)'),

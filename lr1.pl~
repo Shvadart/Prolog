@@ -58,7 +58,7 @@
 формат_работы(_) :- fail.
 зп(_) :- fail.
 
-% Загрузка базы знаний кандидатов и базы опций из отдельных файлов.
+% Загрузка базы знаний кандидатов и базы опций из отдельных файлов
 :- consult('candidates.pl').
 :- consult('options_db.pl').
 
@@ -118,17 +118,8 @@ ans_check(G, Q) :-
          assertz(answer(Pred, NewAnswer)),
          ans_check(G, Q)
     ; A == как ->
-         % Сбрасываем значение для данного атрибута и собираем цепочку уже выбранных ответов в формате "атрибут(значение)"
+         short_story,
          retractall(answer(Pred, _)),
-         findall(AttrValue,
-             ( member(P, [язык_программирования, уровень_опыта, опыт_работы, формат_работы, зп]),
-               answer(P, Val),
-               Val \== почему,
-               Val \== как,
-               format(atom(AttrValue), "~w(~w)", [P, Val])
-             ), ChainList),
-         ( ChainList = [] -> Chain = "Нет данных" ; atomic_list_concat(ChainList, '->', Chain) ),
-         format("Процесс получения решения: ~w\n", [Chain]),
          ask_attribute(G, NewAnswer),
          assertz(answer(Pred, NewAnswer)),
          ans_check(G, Q)
@@ -158,11 +149,9 @@ askable(зп(_)).
 % Вспомогательные предикаты для меню
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-% Получение списка вариантов для заданного атрибута (берётся из options_db.pl)
 option_list(Attr, Options) :-
     findall(Opt, option(Attr, Opt), Options).
 
-% Запись новой опции в файл options_db.pl (без дублирования)
 update_option(Attr, Option) :-
     open('options_db.pl', append, Stream),
     format(Stream, 'option(~q, ~q).~n', [Attr, Option]),
@@ -189,7 +178,6 @@ ask_attribute(G, Answer) :-
     ( option_list(Pred, BaseOptions) -> true ; BaseOptions = [Expected] ),
     OptionsFiltered = BaseOptions,
     ensure_expected(Pred, Expected, OptionsFiltered, OptionsNoWhy),
-    % Добавляем варианты "почему" и "как"
     append(OptionsNoWhy, [почему, как], Options),
     format("Выберите значение для ~w:\n", [Pred]),
     print_options(Options, 1),
@@ -205,11 +193,11 @@ ask_attribute(G, Answer) :-
 print_options([], _).
 print_options([Opt|Rest], N) :-
     format("~w. ~w\n", [N, Opt]),
-    N1 is N+1,
+    N1 is N + 1,
     print_options(Rest, N1).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% Сохранение информации о доказательствах
+% Сохранение информации о доказательствах и история
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 my_asserta(is_ans(G, V)) :-
@@ -218,12 +206,46 @@ my_asserta(is_ans(G, V)) :-
 my_asserta(is_ans(G, V)) :-
     assert(is_ans(G, V)), !.
 
+% Определение списка атрибутов для истории
+attributes([язык_программирования, уровень_опыта, опыт_работы, формат_работы, зп]).
+
+% Модифицированный предикат story/0 для вывода истории в заданном формате
 story :-
     writeln("История:"),
-    is_ans(G, V),
-    format("G = ~w  V = ~w\n", [G, V]),
-    fail.
-story :- true.
+    attributes(Attrs),
+    forall(member(Pred, Attrs),
+           ( answer(Pred, A) ->
+               findall(Opt, option(Pred, Opt), Options),
+               forall(member(Opt, Options),
+                      ( (Opt == A -> V = true ; V = false),
+                        G =.. [Pred, Opt],
+                        format("G = ~w  V = ~w\n", [G, V])
+                      )
+               )
+           ; true  % Пропускаем атрибуты, которые не были запрошены
+           )
+    ).
+
+% Предикат для вывода укороченной истории на данный момент
+short_story :-
+    findall(P, (answer(P, A), A \== почему, A \== как), AskedAttrs),
+    list_to_set(AskedAttrs, UniqueAttrs),
+    ( UniqueAttrs = [] ->
+        writeln("Нет запрошенных атрибутов на данный момент.")
+    ;
+        writeln("Укороченная история на данный момент:"),
+        forall(member(P, UniqueAttrs),
+               ( answer(P, A),
+                 option_list(P, Options),
+                 forall(member(Opt, Options),
+                        ( (Opt == A -> V = true ; V = false),
+                          G =.. [P, Opt],
+                          format("G = ~w  V = ~w\n", [G, V])
+                        )
+                 )
+               )
+        )
+    ).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Вспомогательные предикаты для работы с кандидатами
@@ -237,7 +259,6 @@ conj([G|Gs], (G, Rest)) :-
 wrap(P, Arg, Goal) :-
     Goal =.. [P, Arg].
 
-% Чтение языков программирования (можно вводить несколько вариантов)
 read_languages(Languages) :-
     write('Введите язык программирования: '), read(Lang),
     read_languages_aux([Lang], Languages).
@@ -255,10 +276,8 @@ read_languages_aux(Acc, Languages) :-
          Languages = Acc
     ).
 
-% Добавление нового кандидата
 add_candidate :-
     write('Введите имя кандидата (например, ivan): '), read(Name),
-    % Чтение языков программирования
     read_languages(Languages),
     forall(member(Lang, Languages), update_option_if_new(язык_программирования, Lang)),
     write('Введите уровень опыта (например, junior, middle, senior): '), read(Level),
@@ -274,7 +293,6 @@ add_candidate :-
     writeln('Новый кандидат добавлен в базу знаний.'),
     write_candidate_to_file(Name, Languages, Level, WorkExp, WorkFormat, Salary).
 
-% Формирование тела правила кандидата
 build_clause_body(Languages, Level, WorkExp, WorkFormat, Salary, Body) :-
     maplist(wrap(язык_программирования), Languages, LanguageGoals),
     conj(LanguageGoals, LanguagesConj),
@@ -284,7 +302,6 @@ build_clause_body(Languages, Level, WorkExp, WorkFormat, Salary, Body) :-
     wrap(зп, Salary, SalaryGoal),
     Body = (LanguagesConj, LevelGoal, WorkExpGoal, FormatGoal, SalaryGoal).
 
-% Запись нового кандидата в файл candidates.pl (режим append)
 write_candidate_to_file(Name, Languages, Level, WorkExp, WorkFormat, Salary) :-
     open('candidates.pl', append, Stream),
     format(Stream, '\n%% Новый кандидат\n', []),
@@ -307,19 +324,25 @@ clear_history :-
     retractall(is_ans(_,_)),
     retractall(answer(_,_)).
 
-% Изменённый run_expert – при отсутствии подходящего кандидата выдаёт сообщение,
-% но не приводит к провалу инициализации.
+% Модифицированный run_expert с выбором после поиска
 run_expert :-
     clear_history,
     ( prove(подбор(Кандидат), Proof, [])
       -> ( format("Результат подбора кандидата: ~w\n", [Кандидат]),
            writeln("Доказательство:"),
-           writeln(Proof),
-           story
+           writeln(Proof)
          )
       ; writeln('Не найден кандидат, удовлетворяющий условиям.')
     ),
-    clear_history.
+    writeln('1. Показать историю'),
+    writeln('2. Выход в меню'),
+    read(Choice),
+    ( Choice = 1 ->
+         story
+    ; Choice = 2 ->
+         true
+    ; writeln('Неверный выбор, возвращаемся в меню.')
+    ).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Меню программы
@@ -357,8 +380,7 @@ candidate_menu :-
          menu
     ).
 
-% Определение предиката подбора кандидата.
-% Здесь выбор производится простым поиском кандидата из базы знаний.
+% Определение предиката подбора кандидата
 подбор(Кандидат) :-
     кандидат(Кандидат).
 
